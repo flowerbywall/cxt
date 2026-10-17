@@ -1,0 +1,124 @@
+---
+import { getCollection, type CollectionEntry } from 'astro:content';
+import Base from '../layouts/Base.astro';
+import { excerptOf, postHtml } from '../lib/post-text';
+
+export async function getStaticPaths() {
+	const posts = await getCollection('posts');
+	return posts.map((post) => ({
+		params: { slug: post.id },
+		props: { post },
+	}));
+}
+
+interface Props {
+	post: CollectionEntry<'posts'>;
+}
+
+const { post } = Astro.props;
+// As a string, so the embed placeholders can be lifted out into <figure>s.
+const rawHtml: string = postHtml(post);
+
+/** 2024年3月15日 -- no leading zeros, no separators. UTC getters throughout:
+	a frontmatter `pubDate: 2016-06-01` parses to UTC midnight, so local getters
+	read the previous day anywhere west of UTC (measured: the same post renders
+	2016年5月31日 under TZ=America/Los_Angeles). */
+const pubDate = post.data.pubDate;
+const dateLabel = `${pubDate.getUTCFullYear()}年${pubDate.getUTCMonth() + 1}月${pubDate.getUTCDate()}日`;
+
+// <meta name="description">: the frontmatter field when there is one, otherwise
+// the opening paragraph of the piece itself. Every post currently ships
+// without a description, which left all four falling back to the site tagline
+// -- identical text in four different search results.
+//
+// The excerpt comes from lib/post-text.ts, the same function the feed uses, so
+// a post's description and the feed's preview of it are one sentence rather
+// than two truncations that drift apart. It reads the rendered HTML rather
+// than the markdown body, so what lands in the attribute is the text a reader
+// actually sees.
+const description =
+	post.data.description ?? (excerptOf(rawHtml) || '写作与笔记');
+
+type Chunk = { kind: 'html' | 'embed'; html?: string; embed?: EmbedData };
+interface EmbedData {
+	src: string;
+	poster?: string;
+	caption: string;
+}
+
+function parseEmbeds(html: string): Chunk[] {
+	const re = /<div class="embed"([^>]*)>\s*<div class="embed-caption">([\s\S]*?)<\/div>\s*<\/div>/g;
+	const chunks: Chunk[] = [];
+	let last = 0;
+	let m: RegExpExecArray | null;
+	while ((m = re.exec(html))) {
+		if (m.index > last) chunks.push({ kind: 'html', html: html.slice(last, m.index) });
+		const attrs = m[1] ?? '';
+		const get = (name: string) => {
+			const a = new RegExp(`${name}="([^"]*)"`).exec(attrs);
+			return a ? a[1] : undefined;
+		};
+		chunks.push({
+			kind: 'embed',
+			embed: {
+				src: get('data-embed') ?? '',
+				poster: get('data-poster'),
+				caption: (m[2] ?? '').trim(),
+			},
+		});
+		last = re.lastIndex;
+	}
+	if (last < html.length) chunks.push({ kind: 'html', html: html.slice(last) });
+	return chunks;
+}
+
+const chunks = parseEmbeds(rawHtml);
+---
+
+<Base title={post.data.title} description={description} pubDate={pubDate}>
+	<main id="main-content">
+		<article class="article prose">
+		<a class="back-link" href="/">
+			Index
+		</a>
+		<h1>{post.data.title}</h1>
+		<p class="post-date">{dateLabel}</p>
+		{
+			chunks.map((chunk) =>
+				chunk.kind === 'html' ? (
+					<Fragment set:html={chunk.html} />
+				) : (
+					<figure>
+						<div class="figure-media">
+							{chunk.embed!.src.startsWith('video:') ? (
+								<video
+									autoplay
+									loop
+									muted
+									playsinline
+									preload="none"
+									controls
+									poster={chunk.embed!.poster}
+									width="1280"
+									height="720"
+								>
+									<source src={chunk.embed!.src.slice(6)} type="video/mp4" />
+								</video>
+							) : (
+								<iframe
+									src={chunk.embed!.src}
+									title={`Embedded video: ${(chunk.embed!.caption || chunk.embed!.src).replace(/<[^>]*>/g, '')}`}
+									loading="lazy"
+									allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+									allowfullscreen
+								/>
+							)}
+						</div>
+						{chunk.embed!.caption && <figcaption set:html={chunk.embed!.caption} />}
+					</figure>
+				),
+			)
+		}
+		</article>
+	</main>
+</Base>
