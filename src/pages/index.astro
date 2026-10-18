@@ -1,0 +1,39 @@
+---
+import { getCollection } from 'astro:content';
+import Base from '../layouts/Base.astro';
+import IndexLink from '../components/IndexLink.astro';
+
+// The index reads the collection rather than listing posts by hand, so a new
+// file lands in the right place on its own. Content collections make no
+// ordering promise, so the order has to be asked for: newest first, by the
+// frontmatter pubDate.
+const posts = (await getCollection('posts')).sort(
+	(a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf()
+);
+---
+
+<Base title="chenxiaotian">
+
+	<main id="main-content">
+		<article class="article prose">
+			{/* The visible label is an h2 inside a column, not the page title, so
+			    the page needs its own h1 for the heading outline. Hidden rather
+			    than displayed: the 10px "Writing" is the visual entry point and
+			    a second visible heading above it would compete with it. */}
+			<h1 class="visually-hidden">文章</h1>
+			<div class="index">
+			<div class="index-col">
+				<h2 class="index-heading">Writing</h2>
+				{posts.map((post) => (
+					<IndexLink href={`/${post.id}`}>{post.data.title}</IndexLink>
+				))}
+			</div>
+		</div>
+		<footer class="site-footer">
+			<div class="footer-inner">
+				<a href="mailto:chenxiaotian <flowerbywall@gmail.com>">写信给我</a>
+			</div>
+		</footer>
+		</article>
+	</main>
+</Base>

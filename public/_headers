@@ -1,0 +1,70 @@
+# Cloudflare Pages caching. Without this file Pages serves Astro's defaults:
+# every font and chunk revalidates on each visit (max-age=14400,
+# must-revalidate) and the HTML is never edge-cached at all (cf-cache-status:
+# DYNAMIC), so a cold visitor pays a full round trip to the origin for the
+# font before any text paints.
+#
+# Format is Cloudflare's multi-line block: the URL pattern sits on its own
+# line and every header is indented beneath it. Single-line "path  Header: v"
+# is Netlify's syntax, not this one, and Pages silently ignores the whole
+# file rather than reporting the parse failure -- worth remembering when the
+# headers look right locally but the edge still sends its defaults.
+#
+# Four rules, and the reason there are only four:
+#
+# The panel's Browser Cache TTL (Caching > Configuration, currently 4 hours)
+# overrides any max-age this file sets on a static asset -- the edge sends
+# its own value and drops ours. Per-path max-age rules for the favicons and
+# og.png therefore changed nothing observable and are gone; the panel's four
+# hours is a perfectly good browser cache for files that size. The font keeps
+# its rule for the s-maxage, which the panel does not touch.
+#
+# Rules merge rather than first-match: when a request hits multiple patterns
+# the same header name is comma-joined, not overridden. Cache-Control is
+# therefore declared on the catch-all only, and the more specific rules
+# below strip it with `! Cache-Control` before setting their own -- without
+# the strip, /fonts/Inter-var.woff2 would receive both Cache-Control values
+# concatenated and the result is undefined per HTTP. Rule order matters
+# because `!` only removes headers added by rules above it.
+#
+# HTML: revalidated on each navigation, but the edge holds it for seventy
+# seconds so a push lands for repeat visitors about a minute later.
+# stale-while-revalidate is a day, sized to how long an outage on a personal
+# blog realistically lasts: with the origin down the edge keeps serving the
+# last good page rather than an error, and with the origin healthy the next
+# request after expiry simply gets fresh content. It is an outage buffer,
+# not a freshness promise. This site has exactly two kinds of page -- the
+# index at / and each post at /<slug> -- so the catch-all below is every
+# HTML page there is.
+#
+# max-age is 1, not 0, and that one second is doing real work. Cloudflare does
+# not edge-cache a response whose max-age is 0 -- cf-cache-status stays
+# DYNAMIC and every navigation goes to the origin, which silently voids the
+# s-maxage and stale-while-revalidate below it. max-age=1 makes the response
+# cache-eligible while a browser still treats it as expired on the next
+# navigation, so visitors never see stale HTML through their own cache. The
+# edge's copy is the one that ages, and it ages on the s-maxage clock.
+#
+# must-revalidate is deliberately absent: it forced every navigation to wait
+# for a Cloudflare round-trip before painting, which reads as a stall on slow
+# links. The edge serves stale content immediately and re-fetches behind it.
+#
+# /_astro/* is idle today -- the site ships no JavaScript, so Astro emits no
+# fingerprinted chunks -- and becomes load-bearing the moment a script is
+# added. Content-hashed filenames make immutable honest there: changed code
+# is a changed URL.
+
+/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+
+/*
+  Cache-Control: public, max-age=1, s-maxage=70, stale-while-revalidate=86400
+
+/fonts/*
+  ! Cache-Control
+  Cache-Control: public, max-age=31536000, s-maxage=31536000
+
+/_astro/*
+  ! Cache-Control
+  Cache-Control: public, max-age=31536000, immutable

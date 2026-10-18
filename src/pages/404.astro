@@ -1,0 +1,43 @@
+---
+import Base from '../layouts/Base.astro';
+---
+
+<Base title="404 — 页面不存在" noindex>
+	<main id="main-content">
+	<article class="article prose">
+		<div class="not-found">
+			<h1 class="not-found-code">404</h1>
+			<p class="not-found-text">页面不存在。</p>
+			<a class="back-link" href="/">Index</a>
+		</div>
+		</article>
+	</main>
+</Base>
+
+<style>
+	.not-found {
+		text-align: center;
+		padding: 80px 0;
+	}
+
+	.not-found-code {
+		/* Bigger than the site's inherited 16px headline — this is the one
+		   page where the number is the content, not a label on it. */
+		font-size: 4rem;
+		font-weight: 700;
+		letter-spacing: -0.02em;
+		margin-bottom: 1rem;
+	}
+
+	.not-found-text {
+		color: var(--color-element-tertiary);
+		margin-bottom: 2rem;
+	}
+
+	/* The shared .back-link carries the index's negative margin so its hover
+	   pill bleeds left of the text column. Centred on this page that would
+	   pull the label off-centre, so neutralise it here. */
+	.not-found .back-link {
+		margin-left: 0;
+	}
+</style>
